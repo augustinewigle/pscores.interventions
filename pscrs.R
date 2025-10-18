@@ -1,6 +1,6 @@
 #function to run p-scores
 p_scores<-function(x,CIV,correlation,type){
-  prepare_data<-prep(x) 
+  prepare_data<-prep(x)
   outcomes<-prepare_data$outcomes
   var.outcomes<-prepare_data$var.outcomes
   comm<-prepare_data$comm

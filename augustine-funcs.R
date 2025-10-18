@@ -22,13 +22,13 @@ pscore_civs <- function(x,CIVs,correlation,type) {
 
   CIV_mat <- expand.grid(CIVs)
 
-  pscore_df <- matrix(nrow = nrow(CIV_mat), ncol = length(comm), dimnames = list(list(), trts = comm))
+  pscore_df <- matrix(nrow = nrow(CIV_mat), ncol = length(comm), dimnames = list(list(), comm))
 
   for(i in 1:nrow(CIV_mat)) {
 
-    pscore_df[i,] <- pscores(outcomes,
-                             var.outcomes,
-                             correlation,
+    pscore_df[i,] <- pscores(outcomes=outcomes,
+                             var.outcomes=var.outcomes,
+                             correlation = correlation,
                              beta = as.numeric(-CIV_mat[i,]),
                              type = type,
                              label = as.vector(comm))
@@ -79,7 +79,9 @@ abpmc <- function(x) {
 
   names(auc) <- labels
 
-  return(data.frame(ABPMC = auc, Treatment = labels)) # average probability that it is better than the mean, averaged over the CIVs
+  ranking <- rank(-auc)
+
+  return(data.frame(ABPMC = auc, Treatment = labels, ranking = ranking)) # average probability that it is better than the mean, averaged over the CIVs
 
 }
 
@@ -114,7 +116,9 @@ aupc <- function(x) {
 
   names(auc) <- labels
 
-  return(data.frame(AUPC = auc, Treatment = labels)) # average probability that it beats all other treatments, averaged over the CIVs
+  ranking <- rank(-auc)
+
+  return(data.frame(AUPC = auc, Treatment = labels, ranking = ranking)) # average probability that it beats all other treatments, averaged over the CIVs
 
 }
 
@@ -215,7 +219,8 @@ plot_pothciv <- function(x, title = "") {
   }
 
   ggplot(df, aes(x = !!sym(outcome), y = poth)) +
-    geom_point(col = "black", shape = 21, size = 2, fill = "hotpink") +
+    geom_line() +
+    geom_point(col = "black", shape = 21, size = 2.5, fill = "hotpink") +
     theme_bw() +
     geom_hline(yintercept = 0) +
     labs(x = paste0("CIV (", colnames(civs)[1], ")"), y = "POTH", title = title)
@@ -246,32 +251,96 @@ pscores_heatplot <- function(x, title = "") {
     scale_fill_viridis_c() +
     labs(x = paste0("CIV (", names(x$CIVs)[1], ")"),
          y = paste0("CIV (", names(x$CIVs)[2], ")"),
-         fill = "Rank based on P-score",
+         fill = "Rank based on Extended P-score",
          title = title)
 
 }
 
 #' @param x object from running pscore_civs. Should include exactly 2 outcomes
+#' @param newgridsize Grid size. 0 indicates to use the grid size of the original object
+#' @param hightlight logical; should the minimum and maximum POTH values in the new grid be highlighted?
 #' @param title optional title for plot
-pscores_pothplot <- function(x, title) {
+pscores_pothplot <- function(x, newgridsize = 0, highlight = TRUE, title = "POTH plot") {
 
   if(ncol(x$CIVs) != 2) {
 
-    stop("FUnction only designed for 2-outcome p-scores right now")
+    stop("Function only designed for 2-outcome p-scores right now")
 
   }
 
   bub <- x$all %>%summarise(POTH = unique(poth), .groups = "keep")
 
-  ggplot(bub, aes(x = !!sym(names(x$CIVs)[1]),
+  if(newgridsize > 0) {
+
+    keepx <- quantile(x$CIVs[,1], probs = 0:(newgridsize-1)/(newgridsize-1), type = 1)
+    keepy <- quantile(x$CIVs[,2], probs = 0:(newgridsize-1)/(newgridsize-1), type = 1)
+
+    ix <- which(as.data.frame(bub[,1])[,1] %in% keepx & as.data.frame(bub[,2])[,1] %in% keepy)
+
+    bub <- bub[ix,]
+
+  }
+
+
+  if(highlight) {
+
+    plt <- ungroup(bub) %>%
+      mutate(status = case_when(POTH == max(POTH) ~ "Largest",
+                                POTH == min(POTH) ~ "Smallest",
+                                TRUE ~ "other"))
+
+  } else {
+
+    plt <- bub %>% mutate(status = "other")
+
+  }
+
+
+  g <-ggplot(plt, aes(x = !!sym(names(x$CIVs)[1]),
                   y = !!sym(names(x$CIVs)[2]),
-                  size = POTH)) +
-    geom_point(alpha = 0.7, shape = 21, col = "black", fill = "hotpink4") +
-    scale_size(range = c(.5, 20)) +
+                  size = POTH, col = status, fill = status)) +
+    geom_point(alpha = 0.7, shape = 21) +
+    scale_size(range = c(1, 20)) +
+    scale_fill_manual(breaks = c("Largest", "Smallest"),
+                       values = c(Largest = "lightskyblue3", Smallest = "hotpink3", other = "lightyellow")) +
+    scale_color_manual(breaks = c("Largest", "Smallest"),
+                       values = c(Largest = "lightskyblue4", Smallest = "hotpink4", other = "black")) +
+    guides(size = guide_legend(override.aes = list(fill = "lightyellow"), order = 1),
+           fill = guide_legend(override.aes = list(size = 10),
+                               title = "Useful POTH Values"),
+           colour = guide_legend(title = "Useful POTH Values")) +
+    coord_cartesian(clip = "off") +
     labs(x = paste0("CIV (", names(x$CIVs)[1], ")"),
          y = paste0("CIV (", names(x$CIVs)[2], ")"),
          title = title) +
     theme_bw()
+
+
+  print(g)
+
+  return(list(plot = g, grid = bub))
+
+
+}
+
+#' @param x1 data.frame with column names `Treatment` and `ranking`
+#' @param x2 data.frame with column names `Treatment` and `ranking`
+#' @param name1 Name of the first group of rankings (x axis label)
+#' @param name2 Name of the second group of rankings (y axis label)
+pscores_compare <- function(x1, x2, name1, name2) {
+
+  master <- left_join(x1, x2, join_by(Treatment == Treatment))
+
+  g <-ggplot(master, aes(x = ranking.x, y = ranking.y)) +
+    # geom_point(size = 4, col = "black", shape = 22) +
+    geom_abline(slope = 1, intercept = 0) +
+    geom_label(aes(label = Treatment), fill = "lightyellow") +
+    guides(fill = guide_legend(override.aes = aes(label = "  "))) +
+    labs(x = name1, y = name2) +
+    # scale_fill_viridis_d(option = "turbo", begin = 0.05)+
+    theme_bw()
+
+  print(g)
 
 
 }

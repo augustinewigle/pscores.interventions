@@ -2,7 +2,7 @@
 
 # Libraries ---------------------------
 
-l<-c("netmeta","readxl","mvtnorm", "dplyr", "tidyr", "ggplot2")
+l<-c("netmeta","readxl","mvtnorm", "dplyr", "tidyr", "ggplot2", "xtable")
 lapply(l, require, character.only = TRUE)
 
 #load the functions required
@@ -31,18 +31,28 @@ eff <- list(net_eff)
 
 # P-scores vs. CIV
 
-pscore_graph_t(x=eff,beta_=seq(0,1,0.01),type="H") # I get an out of bounds error when I run this - might want to double check this code
+# pscore_graph_t(x=eff,beta_=seq(0,1,0.01),type="B") # I get an out of bounds error when I run this - might want to double check this code
 
-pscores_1outcome <- pscore_civs(eff, CIVs = list(efficacy = seq(0,0.5,0.01)), type = 'H')
+pscores_1outcome <- pscore_civs(eff, CIVs = list(efficacy = seq(0,0.5,length.out = 50)),
+                                type = 'H')
 
+
+tab <- subset(pscores_1outcome$all, efficacy %in% c(0, 0.5)) %>% group_by(efficacy) %>%
+  mutate(mp = mean(Pscore), resid = Pscore-mp) %>% arrange(desc(Pscore)) %>% ungroup() %>% select(-c(poth, mp))%>%
+  pivot_wider(values_from = c(Pscore, ranking, resid), names_from = efficacy, names_vary = "slowest")
+print(xtable(tab, digits = 3), include.rownames = F)
 
 # Plot P-scores vs CIV
 
 plot_pscores(pscores_1outcome, room = c(0,0.1), title = "One Outcome: Efficacy")
 
 # Plot of POTH vs CIV
-
 plot_pothciv(pscores_1outcome, title = "One Outcome: Efficacy")
+
+# POTH vs CIV over a wider range of CIVs
+pscores_wide <- pscore_civs(eff, CIVs = list(efficacy = seq(-1,1,length.out = 50)),
+                            type = 'H')
+plot_pothciv(pscores_wide, title = "One Outcome: Efficacy")
 
 # Summarise performance using AUPC
 summ_eff <- aupc(pscores_1outcome)
@@ -57,8 +67,8 @@ net_weight<-netmeta(TE,seTE,treat1,treat2,studlab,sm="SMD",data=data_weight,tol.
 correlation<-matrix(c(1,-0.5,-0.5,1),2,2)
 
 pscores_2outcomes <- pscore_civs(list(net_eff, net_weight),
-                                 CIVs = list(efficacy = seq(0,0.5,0.05),
-                                             weight = seq(-1, 0, 0.1)),
+                                 CIVs = list(efficacy = seq(0, 0.5,length.out = 50),
+                                             weight = seq(0, -0.5, length.out = 50)),
                                  correlation = correlation,
                                  type = c("H", "H"))
 
@@ -66,10 +76,30 @@ pscores_2outcomes <- pscore_civs(list(net_eff, net_weight),
 pscores_heatplot(pscores_2outcomes, title = "Two Outcomes: Efficacy and Weight Gain")
 
 # POTH bubble plot
-pscores_pothplot(pscores_2outcomes, title = "Two Outcomes: Efficacy and Weight Gain")
+ok <- pscores_pothplot(pscores_2outcomes, newgridsize = 11, title = "Two Outcomes: Efficacy and Weight Gain")
+
+subset(ok$grid, POTH == max(POTH))
 
 # Summary over 2 ranges of CIVs
 summ_2outcomes <- aupc(pscores_2outcomes)
+
+# Try comparing two hierarchies - compare a single CIV versus a small range
+o1 <- pscore_civs(eff, CIVs = list(efficacy = seq(0.2, 0.4,length.out = 50)),
+                  type = 'H')
+
+h1 <- aupc(o1)
+o2 <- pscore_civs(eff, CIVs = list(efficacy = 0.3),
+                  type = 'H')
+
+h2 <- o2$all
+
+pscores_compare(x1 = h1, x2 = h2, name1 = "AUPC Rank,\nCIV (efficacy) 0.20-0.40",
+                name2 = "Extended P-score Rank,\nCIV (efficacy) = 0.30")
+
+
+# See the new Hierarchy
+data.frame(Treatment = summ_2outcomes$Treatment,
+           AUPC = round(summ_2outcomes$AUPC, digits = 5)) %>% arrange(-AUPC)
 
 plot_civsummary(summ_2outcomes, title = "Two Outcomes: Efficacy and Weight Gain")
 # can keep order the same to make comparison easier between different CIV ranges/number of outcomes
@@ -97,11 +127,17 @@ pscores_3outcomes <- pscore_civs(x=list(net_eff, net_weight, net_drp),
 # Try a range of CIVs for some outcomes
 
 pscores_3outcomes2 <- pscore_civs(x=list(net_eff, net_weight, net_drp),
-                                 CIVs = list(efficacy = seq(0,0.5, 0.05),
+                                 CIVs = list(efficacy = seq(0,-0.3, length.out = 10),
                                              weight = 0,
                                              dropout = 0),
                                  correlation =cn,
                                  type=c("H","H","H"))
+
+# Try again...
+
+p_scores(x = list(net_eff, net_weight, net_drp), c(-0.267,0,0), correlation =cn,type=c("H","H","H")) # OLA is NaN?
+
+subset(pscores_3outcomes2$all, is.nan(Pscore)) # get NaN P-scores with some treatments...
 summ_3outcomes <- aupc(pscores_3outcomes2)
 plot_civsummary(summ_3outcomes, title = "Three Outcomes: Efficacy (CIV [0, 0.5]), Weight (CIV = 0) and Dropout (CIV = 0)")
 

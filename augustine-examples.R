@@ -42,8 +42,8 @@ tab <- subset(pscores_1outcome$all, efficacy %in% c(0, 0.5)) %>% group_by(effica
 print(xtable(tab, digits = 3), include.rownames = F)
 
 # Plot P-scores vs CIV
-
 plot_pscores(pscores_1outcome, room = c(0,0.15), title = "One Outcome: Efficacy")
+
 
 # Plot of POTH vs CIV
 plot_pothciv(pscores_1outcome, title = "One Outcome: Efficacy")

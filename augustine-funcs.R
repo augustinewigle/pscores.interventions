@@ -146,19 +146,29 @@ plot_civsummary <- function(obj, ordering = "ranking", title = "") {
 # Plotting for 1 outcome ------------------------------
 
 #' @param x object from running pscore_civs. only accommodates objects where only one outcome has varying CIV
+#' @param residuals Logical - should P-score residuals or raw p-scores are plotted? Default is TRUE
 #' @param room a vector of length two that can be used to expand the plot area to accommodate the legend
 #' @param title optional title for the plot
-plot_pscores <- function(x, room = c(0.05, 0.05), title = "") {
-
-  pscores <- x$pscores
-  CIVs <- x$CIVs[,1]
-  outcome_name <- names(x$CIVs)[1]
+plot_pscores <- function(x, residuals = TRUE, room = c(0.05, 0.05), title = "") {
 
   if(ncol(x$CIVs) > 1) {
 
     stop("This function is meant for single-outcome P-scores")
 
   }
+
+  if(residuals) {
+
+    pscores <- x$pscores-mean(x$pscores)
+
+  } else {
+
+    pscores <- x$pscores
+
+  }
+
+  CIVs <- x$CIVs[,1]
+  outcome_name <- names(x$CIVs)[1]
 
   labels <- colnames(pscores)
   highlight_ix <- sort(pscores[1,], index.return = TRUE, decreasing = TRUE)$ix[1:5] # highlight the top 5
@@ -167,7 +177,7 @@ plot_pscores <- function(x, room = c(0.05, 0.05), title = "") {
        type="l",
        xlim=c(min(CIVs),max(CIVs)+room[1]),
        main = title,
-       xlab=paste0("CIV for ", outcome_name),ylab="P-score")
+       xlab=paste0("CIV for ", outcome_name),ylab=ifelse(residuals, "Residual", "P-score"))
 
   for(i in 1:ncol(pscores)) {
 
@@ -176,13 +186,38 @@ plot_pscores <- function(x, room = c(0.05, 0.05), title = "") {
 
   }
 
-  lines(CIVs, rowMeans(pscores), type = "b")
+  # Add lines to help visualize
+
+  if(!residuals) {
+
+    lines(CIVs, rowMeans(pscores), type = "b")
+
+  } else {
+
+    abline(h = 0, lty = "dashed")
+
+  }
+
+  # set up legend
+  leglabs <- labels[highlight_ix]
+  cols <- 2:6
+  ltys <- rep(1,5)
+  pchs <- rep(NA, 5)
+
+  if(!residuals) {
+
+    leglabs <- c(leglabs, "Mean")
+    cols <- c(cols, 1)
+    ltys <- c(ltys, NA)
+    pchs <- c(pchs, 1)
+
+  }
 
   legend(x = "topright", title = paste0("Top treatments\n(at CIV = ", round(CIVs[1], 1), ")"),
-         legend = c(labels[highlight_ix], "Mean"),
-         col = c(2:(6), 1),
-         lty = c(rep(1, 5), NA),
-         pch = c(rep(NA, 5), 1),
+         legend = leglabs,
+         col = cols,
+         lty = ltys,
+         pch = pchs,
          # bty = "n",
          horiz= F)
 }

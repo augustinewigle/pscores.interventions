@@ -159,7 +159,7 @@ plot_pscores <- function(x, residuals = TRUE, room = c(0.05, 0.05), title = "") 
 
   if(residuals) {
 
-    pscores <- x$pscores-mean(x$pscores)
+    pscores <- x$pscores-rowMeans(x$pscores)
 
   } else {
 
@@ -194,7 +194,7 @@ plot_pscores <- function(x, residuals = TRUE, room = c(0.05, 0.05), title = "") 
 
   } else {
 
-    abline(h = 0, lty = "dashed")
+    lines(CIVs, rowMeans(pscores), lty = "dashed")
 
   }
 

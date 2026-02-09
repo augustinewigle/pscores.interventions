@@ -36,7 +36,6 @@ eff <- list(net_eff)
 pscores_1outcome <- pscore_civs(eff, CIVs = list(efficacy = seq(0,0.5,length.out = 50)),
                                 type = 'H')
 
-
 tab <- subset(pscores_1outcome$all, efficacy %in% c(0, 0.5)) %>% group_by(efficacy) %>%
   mutate(mp = mean(Pscore), resid = Pscore-mp) %>% arrange(desc(Pscore)) %>% ungroup() %>% select(-c(poth, mp))%>%
   pivot_wider(values_from = c(Pscore, ranking, resid), names_from = efficacy, names_vary = "slowest")
@@ -44,7 +43,8 @@ print(xtable(tab, digits = 3), include.rownames = F)
 
 # Plot P-scores vs CIV
 
-plot_pscores(pscores_1outcome, room = c(0,0.1), title = "One Outcome: Efficacy")
+plot_pscores(pscores_1outcome, room = c(0,0.1), title = "One Outcome: Efficacy",
+             residuals = TRUE)
 
 # Plot of POTH vs CIV
 plot_pothciv(pscores_1outcome, title = "One Outcome: Efficacy")
@@ -58,11 +58,28 @@ plot_pothciv(pscores_wide, title = "One Outcome: Efficacy")
 summ_eff <- aupc(pscores_1outcome)
 plot_civsummary(summ_eff, title = "One Outcome: Efficacy")
 
-# Two outcomes: Efficacy and weight gain -------------------------------------
+# One outcome: Weight ---------------------------------------------
 
 data_weight<-pairwise (treat=list(TreatA, TreatB),mean=list(meanweightA,meanweightB),sd=list(SDweightA,SDweightB),n=list(nweightA,nweightB),
                        data = data, studlab = data$`study ID`, sm = "SMD")
 net_weight<-netmeta(TE,seTE,treat1,treat2,studlab,sm="SMD",data=data_weight,tol.multiarm = 0.5,tol.multiarm.se=0.5,ref="PBO")
+
+wt <- list(net_weight)
+
+pscores_wt <- pscore_civs(wt, CIVs = list(weight = seq(-0.5, 0, length.out = 50)),
+                                type = 'H')
+
+aupc(pscores_wt)
+
+tab <- subset(pscores_wt$all, weight %in% c(0, 0.5)) %>% group_by(weight) %>%
+  mutate(mp = mean(Pscore), resid = Pscore-mp) %>%
+  arrange(desc(Pscore)) %>% ungroup() %>% select(-c(poth, mp))%>%
+  pivot_wider(values_from = c(Pscore, ranking, resid), names_from = weight, names_vary = "slowest")
+print(xtable(tab, digits = 3), include.rownames = F)
+tab
+# Two outcomes: Efficacy and weight gain -------------------------------------
+
+
 
 correlation<-matrix(c(1,-0.5,-0.5,1),2,2)
 
